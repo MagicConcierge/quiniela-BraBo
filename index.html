@@ -410,14 +410,10 @@ firebase.initializeApp({
 const db = firebase.database();
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
-const MEMBERS = ["Mamá","Papá","Lucca","Liam","Tito","Nonna","Amadita","Javier","Maria","Joaquin","Sofia","Rafa","Liz"];
+const MEMBERS = ["Papá","Mamá","Lucca","Liam"];
 const PTS = 3;
-const RESULT_ADMINS = ["Rafa","Javier"]; // solo ellos ponen resultados
-const PROXY = {
-  "Tito":   ["Nonna"],
-  "Rafa":   ["Liz"],
-  "Javier": ["Amadita","Maria","Sofia","Joaquin"],
-};
+const RESULT_ADMINS = ["Papá","Mamá"]; // solo ellos ponen resultados
+const PROXY = {}; // todos ingresan su propio pronóstico
 
 const FLAGS = {
   "México":"🇲🇽","Sudáfrica":"🇿🇦","Corea del Sur":"🇰🇷","R. Checa":"🇨🇿",
@@ -791,7 +787,7 @@ function renderMedallero() {
       <div class="med-wait">
         <div class="med-wait-icon">⏳</div>
         <div class="med-wait-title">¡Esperando el primer gol!</div>
-        <div class="med-wait-sub">El medallero aparece cuando Rafa o Javier<br>registren el resultado del primer partido.</div>
+        <div class="med-wait-sub">El medallero aparece cuando Papá o Mamá<br>registren el resultado del primer partido.</div>
       </div></div>`;
     return;
   }
