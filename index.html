@@ -325,6 +325,15 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .stat-val    { font-family:'Fredoka One',sans-serif; font-size:1.7rem; color:var(--navy); line-height:1.1; margin-top:2px; }
 .stat-sub    { font-size:0.7rem; color:var(--muted); font-weight:700; }
 
+/* ── COPY BUTTON ── */
+.copy-msg-btn {
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:12px;border-radius:var(--radius);border:2px dashed var(--gold);
+  font-size:0.88rem;font-weight:800;cursor:pointer;transition:all 0.15s;
+  margin-bottom:1rem;font-family:inherit;background:var(--gold-light,#fffbf0);color:#8a5000;
+}
+.copy-msg-btn:hover{background:#fff3d0;transform:translateY(-1px);}
+.copy-msg-btn.copied{background:#e8f5e9;border-color:var(--green2);color:var(--green);border-style:solid;}
 /* ── TOAST ── */
 .toast {
   position:fixed; bottom:2rem; left:50%; transform:translateX(-50%) translateY(20px);
@@ -455,15 +464,22 @@ function matchStarted(match) {
   if (!match || !match.f || match.utcH === undefined) return false;
   const now = new Date();
   if (GRACE_DATES.includes(match.f) && now < GRACE_UNTIL) return false;
-  const d = DATE_MAP[match.f];
-  if (!d) return false;
-  const kickoff = new Date(Date.UTC(2026, d[0], d[1], match.utcH, match.utcM||0, 0));
+  // Use pre-computed UTC time (handles day rollover correctly)
+  const kickoff = new Date(Date.UTC(2026, match.utcMonth, match.utcDay, match.utcH, match.utcM||0, 0));
   return now >= kickoff;
 }
 
 function mk(l,v,f,hmx,g) {
   const [h,m] = hmx.split(':').map(Number);
-  return { l, v, f, g, mx:hmx, utcH:(h+6)%24, utcM:m };
+  // Convert MX time (UTC-6) to UTC — let JS handle day rollover automatically
+  const d = DATE_MAP[f] || [0,1];
+  const kickoffUTC = new Date(Date.UTC(2026, d[0], d[1], h + 6, m, 0));
+  return { l, v, f, g, mx:hmx,
+    utcH: kickoffUTC.getUTCHours(),
+    utcM: kickoffUTC.getUTCMinutes(),
+    utcDay: kickoffUTC.getUTCDate(),
+    utcMonth: kickoffUTC.getUTCMonth()
+  };
 }
 
 const GRUPOS = [
@@ -564,6 +580,7 @@ const PHASES=[
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let me = null, dbState = {}, unsub = null;
+let todayMatchesGlobal = [], lastAIDate = "";
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 const getMX = () => {
@@ -603,7 +620,7 @@ function buildResBtns(phId,mi,real,lo,vi) {
 }
 
 function predsHtml(phId,mi,real,preds,lo,vi,match) {
-  const locked=matchStarted(match);
+  const locked=matchStarted(match)&&!canResult();
   return MEMBERS.map(n => {
     const v=preds?.[n]||"", isMe=n===me, proxy=!isMe&&canActAs(n);
     const canEdit=(isMe||proxy)&&!locked;
@@ -723,8 +740,10 @@ function renderHoy() {
   </div>`;
 
   todayM.forEach(({ph,m,i})=>{html+=matchCardHtml(ph.id,m,i);});
-  panel.innerHTML=html;
-  loadAI(todayM,today);
+  const copyBtnHtml=`<button class="copy-msg-btn" id="copy-wa-btn" onclick="copyBraBoMsg()">📋 Copiar mensaje de hoy para WhatsApp</button>`;
+  panel.innerHTML=copyBtnHtml+html;
+  todayMatchesGlobal=todayM;
+  if(lastAIDate!==today){lastAIDate=today;loadAI(todayM,today);}
 }
 
 async function callClaude(system,user,fallback) {
@@ -752,11 +771,11 @@ async function loadAI(todayM,today) {
   ];
   // Kid-friendly curiosity angles — amazing facts for Lucca (8) and Liam (5)
   const angles=[
-    `Un dato INCREÍBLE y divertido sobre ${focusMatch.l} o ${focusMatch.v} que haría que un niño de 5 años dijera WOW.`,
-    `¿Cuántos goles, jugadores o algo asombroso tiene ${focusMatch.l} o ${focusMatch.v}? Algo que sorprenda a niños.`,
-    `Una comparación divertida del tamaño o poder de ${focusMatch.l} vs ${focusMatch.v} usando cosas que conocen los niños (dinosaurios, pizzas, etc).`,
-    `El jugador más famoso de ${focusMatch.l} o ${focusMatch.v} — algo gracioso o increíble de él que no sabían.`,
-    `¿Por qué el uniforme o la bandera de ${focusMatch.l} o ${focusMatch.v} tiene esos colores? Historia corta y sorprendente.`,
+    `¿Cuántas Copas del Mundo ha ganado ${focusMatch.l} o ${focusMatch.v}? Dame el número exacto y explícalo de forma divertida para un niño de 5 años.`,
+    `¿Quién es el jugador más famoso de ${focusMatch.l} o ${focusMatch.v} hoy? En qué equipo juega, cuántos goles tiene. Explícalo para niños de 5 y 8 años.`,
+    `Compara a ${focusMatch.l} vs ${focusMatch.v}: ¿cuál ha ganado más partidos en toda la historia del Mundial? Con números exactos y una comparación divertida para niños.`,
+    `Un récord increíble de ${focusMatch.l} o ${focusMatch.v} en Mundiales. Con año exacto. Explícalo como si fuera un superpoder de los jugadores.`,
+    `El jugador más famoso de ${focusMatch.l} — cuántos goles ha metido en su carrera y en qué equipo famoso juega. Que un niño de 5 años entienda por qué es increíble.`,
   ];
 
   const style=styles[Math.floor(Math.random()*styles.length)];
@@ -889,9 +908,38 @@ function setSyncStatus(s) {
 }
 
 // ── ACTIONS ───────────────────────────────────────────────────────────────────
+function generateBraBoMsg(matches, today) {
+  const link="https://MagicConcierge.github.io/quiniela-paraiso";
+  const lines=matches.map(({m})=>{
+    const lo=FLAGS[m.l]||"🏳️",vi=FLAGS[m.v]||"🏳️";
+    return `${lo} ${m.l} vs ${m.v} ${vi}\n⏰ ${m.mx||""} hora MX`;
+  });
+  const n=matches.length;
+  return `🏆 QUINIELA BRABO 🏆\n⚽ ${today} · ${n} partido${n!==1?"s":""} hoy\n\n`+
+    lines.join("\n\n")+
+    `\n\n🔒 Pronósticos se cierran al inicio de cada partido\n👉 ${link}`;
+}
+function copyBraBoMsg() {
+  const msg=generateBraBoMsg(todayMatchesGlobal,lastAIDate);
+  const btn=document.getElementById("copy-wa-btn");
+  const ok=()=>{
+    if(btn){btn.textContent="✅ ¡Copiado! Pégalo en WhatsApp";btn.classList.add("copied");
+      setTimeout(()=>{btn.textContent="📋 Copiar mensaje de hoy para WhatsApp";btn.classList.remove("copied");},3000);}
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(msg).then(ok).catch(()=>{
+      const ta=document.createElement("textarea");ta.value=msg;
+      document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);ok();
+    });
+  } else {
+    const ta=document.createElement("textarea");ta.value=msg;
+    document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);ok();
+  }
+}
 function cyclePred(phId,mi,name) {
   const ph=PHASES.find(p=>p.id===phId);
-  if(ph&&matchStarted(ph.matches[mi]))return;
+  // Only block non-admins when match has started
+  if(ph&&matchStarted(ph.matches[mi])&&!canResult())return;
   if(!canActAs(name))return;
   const cur=getMData(phId,mi).preds?.[name]||"";
   const cycle=["1","X","2",""];
